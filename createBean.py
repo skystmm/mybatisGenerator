@@ -134,7 +134,7 @@ class CreateMapper(object):
         root.appendChild(delete_tag)
 
         for x in content:
-            tag = None
+            #tag = None
             if_tag = xml.createElement('if')
             key_tag = xml.createElement('if')
             value_tag = xml.createElement('if')
@@ -163,6 +163,7 @@ class CreateMapper(object):
             up_tag.setAttribute("test", "%s != null" % common.underline_to_camel(x[0]))
             up_tag.appendChild(xml.createTextNode("%s = #{%s}," % (x[0], common.underline_to_camel(x[0]))))
             set_tag.appendChild(up_tag)
+
         update_tag.appendChild(
             xml.createTextNode("where %s = #{%s} " % (content[0][0], common.underline_to_camel(content[0][0]))))
         with open(self.output_path % ('xml', mapper, 'xml'), 'w')as f:
