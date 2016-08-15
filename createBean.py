@@ -101,7 +101,7 @@ class CreateMapper(object):
         insert_tag = xml.createElement('insert')
         insert_tag.setAttribute("id", "insert")
         insert_tag.setAttribute("paramterType", class_name)
-        insert_tag.appendChild(xml.createTextNode("insert into %s "))
+        insert_tag.appendChild(xml.createTextNode("insert into %s "%table_name))
         trim1_tag = xml.createElement("trim")
 
         # prefix="(" suffix=")" suffixOverrides=","
@@ -166,6 +166,7 @@ class CreateMapper(object):
 
         update_tag.appendChild(
             xml.createTextNode("where %s = #{%s} " % (content[0][0], common.underline_to_camel(content[0][0]))))
+        select_tag.appendChild(xml.createTextNode("order by %s desc" % content[0][0]))
         with open(self.output_path % ('xml', mapper, 'xml'), 'w')as f:
             xml.writexml(f, addindent='  ', newl='\n')
 
