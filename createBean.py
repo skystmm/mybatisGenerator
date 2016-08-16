@@ -1,12 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# author      Administrator
+# author      skystmm
 # created on  2016/08/12
+
 import common
 import xml.dom.minidom as dom
 
 
 class CreateMapper(object):
+    """
+    from excel to create sql/java bean/mapper file.
+    """
     bean = 'private %s %s;\r\n'
     clazz = 'public class %s {\r\n'
     output_path = './%s/%s.%s'
@@ -23,11 +27,16 @@ class CreateMapper(object):
         self.package = pack
 
     def create_bean(self):
+        """
+        create java bean by sql info
+        :return:
+        """
         for x in self.table_map.keys():
             li = self.table_map[x]
             class_name = common.get_bean_name(x)
             properties = []
-            properties.append("package %s;\r\n" % self.package)
+            if self.package is not None:
+                properties.append("package %s;\r\n" % self.package)
             properties.append(self.clazz % class_name)
             for c in li:
                 column = c[0]
@@ -38,6 +47,10 @@ class CreateMapper(object):
             self.wirte_to_file('bean', class_name, 'java', properties)
 
     def create_sql(self):
+        """
+        create sql file
+        :return:
+        """
         for table_name in self.table_map.keys():
             li = self.table_map[table_name]
             properties = []
@@ -55,6 +68,14 @@ class CreateMapper(object):
             self.wirte_to_file('sql', 'tables', 'sql', properties)
 
     def wirte_to_file(self, type, name, tail, content):
+        """
+        write info into target file
+        :param type:
+        :param name:
+        :param tail:
+        :param content:
+        :return:
+        """
         if type == 'sql':
             mode = 'a'
         else:
@@ -84,7 +105,8 @@ class CreateMapper(object):
         :param content:
         :return:
         """
-        base_select = "\r\nselect * from %s where 1=1\r\n" % table_name
+        class_name = '%s.%s' % (self.package, class_name) if self.package is not None else class_name
+        base_select = "\nselect * from %s where 1=1\n" % table_name
         impl = dom.getDOMImplementation()
         type = dom.DocumentType('mapper')
         type.publicId = "-//mybatis.org//DTD Mapper 3.0//EN"
@@ -94,7 +116,7 @@ class CreateMapper(object):
         root = self.xml.documentElement
         root.setAttribute("namespace", mapper)  # 增加属性
         resultMap = self.tag_create('resultMap', root,
-                                    attr={'id': 'BaseResultMap', 'type': '%s.%s' % (self.package, class_name)})
+                                    attr={'id': 'BaseResultMap', 'type': class_name})
 
         self.tag_create('select', root, contents="%s and %s = #{%s}" % (
             base_select, content[0][0], common.underline_to_camel(content[0][0])),
@@ -104,7 +126,7 @@ class CreateMapper(object):
                                      attr={"id": "selectBy", "resultMap": 'BaseResultMap'})
 
         insert_tag = self.tag_create('insert', root, contents="insert into %s " % table_name,
-                                     attr={"id": "insert", "paramterType": '%s.%s' % (self.package, class_name)})
+                                     attr={"id": "insert", "paramterType": class_name})
 
         trim1_tag = self.tag_create("trim", insert_tag, attr={"prefix": "(", "suffix": ")", "suffixOverrides": ","})
 
@@ -117,7 +139,7 @@ class CreateMapper(object):
 
         self.tag_create('delete', root, contents="delete from %s where %s = #{%s}" % (
             table_name, content[0][0], common.underline_to_camel(content[0][0])),
-                        attr={'id': 'delete', 'paramterType': '%s.%s' % (self.package, class_name)})
+                        attr={'id': 'delete', 'paramterType': class_name})
 
         for x in content:
 
@@ -166,7 +188,7 @@ class CreateMapper(object):
             tag.appendChild(self.xml.createTextNode(contents))
         if isinstance(parent, dom.Document) or isinstance(parent, dom.Element):
             parent.appendChild(tag)
-        elif isinstance(parent, str):
+        elif isinstance(parent, basestring):
             parent = self.xml.getElementsByTagName(parent)
             if parent is not None:
                 parent.appendChild(tag)
