@@ -16,16 +16,18 @@ class CreateMapper(object):
     column_sql = '`%s`  %s ,\r\n'
     primary = 'PRIMARY KEY (`%s`)\r\n'
 
-    def __init__(self, path, files):
+    def __init__(self, path, files, pack):
         self.path = path
         self.files = files
         self.table_map = common.read_info(self.path, self.files)
+        self.package = pack
 
     def create_bean(self):
         for x in self.table_map.keys():
             li = self.table_map[x]
             class_name = common.get_bean_name(x)
             properties = []
+            properties.append("package %s;\r\n" % self.package)
             properties.append(self.clazz % class_name)
             for c in li:
                 column = c[0]
@@ -62,6 +64,10 @@ class CreateMapper(object):
                 f.write(p)
 
     def create_mapper(self):
+        """
+        create mybatis mapper.xml
+        :return:
+        """
         for table_name in self.table_map.keys():
             li = self.table_map[table_name]
             properties = []
@@ -70,109 +76,109 @@ class CreateMapper(object):
             self.generate_xml(table_name, class_name, mapper, li)
 
     def generate_xml(self, table_name, class_name, mapper, content):
+        """
+        mybatis mapper.xml generate
+        :param table_name:
+        :param class_name:
+        :param mapper:
+        :param content:
+        :return:
+        """
         base_select = "\r\nselect * from %s where 1=1\r\n" % table_name
         impl = dom.getDOMImplementation()
         type = dom.DocumentType('mapper')
         type.publicId = "-//mybatis.org//DTD Mapper 3.0//EN"
         type.systemId = "http://mybatis.org/dtd/mybatis-3-mapper.dtd"
 
-        xml = impl.createDocument(None, 'mapper', type)
-        root = xml.documentElement
+        self.xml = impl.createDocument(None, 'mapper', type)
+        root = self.xml.documentElement
         root.setAttribute("namespace", mapper)  # 增加属性
-        resultMap = xml.createElement('resultMap')
-        resultMap.setAttribute('id', 'BaseResultMap')
-        resultMap.setAttribute('type', class_name)
-        root.appendChild(resultMap)
+        resultMap = self.tag_create('resultMap', root,
+                                    attr={'id': 'BaseResultMap', 'type': '%s.%s' % (self.package, class_name)})
 
-        sid_tag = xml.createElement('select')
-        sid_tag.setAttribute("id", "selectById")
-        sid_tag.setAttribute("resultMap", 'BaseResultMap')
-        select_date = xml.createTextNode(
-            "%s and %s = #{%s}" % (base_select, content[0][0], common.underline_to_camel(content[0][0])))
-        sid_tag.appendChild(select_date)
-        root.appendChild(sid_tag)
+        self.tag_create('select', root, contents="%s and %s = #{%s}" % (
+            base_select, content[0][0], common.underline_to_camel(content[0][0])),
+                        attr={"id": "selectById", "resultMap": 'BaseResultMap'})
 
-        select_tag = xml.createElement('select')
-        select_tag.setAttribute("id", "selectBy")
-        select_tag.setAttribute("resultMap", 'BaseResultMap')
-        select_tag.appendChild(xml.createTextNode(base_select))
-        root.appendChild(select_tag)
+        select_tag = self.tag_create('select', root, contents=base_select,
+                                     attr={"id": "selectBy", "resultMap": 'BaseResultMap'})
 
-        insert_tag = xml.createElement('insert')
-        insert_tag.setAttribute("id", "insert")
-        insert_tag.setAttribute("paramterType", class_name)
-        insert_tag.appendChild(xml.createTextNode("insert into %s "%table_name))
-        trim1_tag = xml.createElement("trim")
+        insert_tag = self.tag_create('insert', root, contents="insert into %s " % table_name,
+                                     attr={"id": "insert", "paramterType": '%s.%s' % (self.package, class_name)})
 
-        # prefix="(" suffix=")" suffixOverrides=","
-        trim1_tag.setAttribute("prefix", "(")
-        trim1_tag.setAttribute("suffix", ")")
-        trim1_tag.setAttribute("suffixOverrides", ",")
+        trim1_tag = self.tag_create("trim", insert_tag, attr={"prefix": "(", "suffix": ")", "suffixOverrides": ","})
 
-        trim2_tag = xml.createElement("trim")
-        trim2_tag.setAttribute("prefix", "values (")
-        trim2_tag.setAttribute("suffix", ")")
-        trim2_tag.setAttribute("suffixOverrides", ",")
+        trim2_tag = self.tag_create("trim", insert_tag,
+                                    attr={"prefix": "values (", "suffix": ")", "suffixOverrides": ","})
+        update_tag = self.tag_create('update', root, contents="update %s " % table_name,
+                                     attr={'id': 'update', "paramterType": class_name})
 
-        insert_tag.appendChild(trim1_tag)
-        insert_tag.appendChild(trim2_tag)
+        set_tag = self.tag_create('set', update_tag)
 
-        root.appendChild(insert_tag)
-
-        update_tag = xml.createElement('update')
-        update_tag.setAttribute("id", 'update')
-        update_tag.setAttribute("paramterType", class_name)
-        update_tag.appendChild(xml.createTextNode("update %s " % table_name))
-
-        set_tag = xml.createElement("set")
-        update_tag.appendChild(set_tag)
-        root.appendChild(update_tag)
-
-        delete_tag = xml.createElement("delete")
-        delete_tag.appendChild(xml.createTextNode(
-            "delete from %s where %s = #{%s}" % (table_name, content[0][0], common.underline_to_camel(content[0][0]))))
-        root.appendChild(delete_tag)
+        self.tag_create('delete', root, contents="delete from %s where %s = #{%s}" % (
+            table_name, content[0][0], common.underline_to_camel(content[0][0])),
+                        attr={'id': 'delete', 'paramterType': '%s.%s' % (self.package, class_name)})
 
         for x in content:
-            #tag = None
-            if_tag = xml.createElement('if')
-            key_tag = xml.createElement('if')
-            value_tag = xml.createElement('if')
-            up_tag = xml.createElement('if')
+
             if x[0] == 'id':
-                tag = xml.createElement('id')
+                tag = self.xml.createElement('id')
             else:
-                tag = xml.createElement('column')
+                tag = self.xml.createElement('column')
 
             tag.setAttribute("column", x[0])
             tag.setAttribute("property", common.underline_to_camel(x[0]))
             resultMap.appendChild(tag)
 
-            if_tag.setAttribute("test", "%s != null" % common.underline_to_camel(x[0]))
-            if_tag.appendChild(xml.createTextNode(" and %s = #{%s}" % (x[0], common.underline_to_camel(x[0]))))
-            select_tag.appendChild(if_tag)
+            self.tag_create('if', select_tag, contents=" and %s = #{%s}" % (x[0], common.underline_to_camel(x[0])),
+                            attr={"test": "%s != null" % common.underline_to_camel(x[0])})
 
-            value_tag.setAttribute("test", "%s != null" % common.underline_to_camel(x[0]))
-            value_tag.appendChild(xml.createTextNode('#{%s},' % common.underline_to_camel(x[0])))
-            trim2_tag.appendChild(value_tag)
+            self.tag_create('if', trim2_tag, contents='#{%s},' % common.underline_to_camel(x[0]),
+                            attr={"test": "%s != null" % common.underline_to_camel(x[0])})
 
-            key_tag.setAttribute("test", "%s != null" % common.underline_to_camel(x[0]))
-            key_tag.appendChild(xml.createTextNode(x[0] + ','))
-            trim1_tag.appendChild(key_tag)
+            self.tag_create('if', trim1_tag, contents=x[0] + ',',
+                            attr={"test": "%s != null" % common.underline_to_camel(x[0])})
 
-            up_tag.setAttribute("test", "%s != null" % common.underline_to_camel(x[0]))
-            up_tag.appendChild(xml.createTextNode("%s = #{%s}," % (x[0], common.underline_to_camel(x[0]))))
-            set_tag.appendChild(up_tag)
+            self.tag_create('if', set_tag, contents="%s = #{%s}," % (x[0], common.underline_to_camel(x[0])),
+                            attr={"test": "%s != null" % common.underline_to_camel(x[0])})
 
         update_tag.appendChild(
-            xml.createTextNode("where %s = #{%s} " % (content[0][0], common.underline_to_camel(content[0][0]))))
-        select_tag.appendChild(xml.createTextNode("order by %s desc" % content[0][0]))
+            self.xml.createTextNode(
+                "where %s = #{%s} " % (content[0][0], common.underline_to_camel(content[0][0]))))
+        select_tag.appendChild(self.xml.createTextNode("order by %s desc" % content[0][0]))
         with open(self.output_path % ('xml', mapper, 'xml'), 'w')as f:
-            xml.writexml(f, addindent='  ', newl='\n')
+            self.xml.writexml(f, addindent='  ', newl='\n')
+
+    def tag_create(self, tag_name, parent, contents=None, attr={}):
+        """
+        meethod fun : create xml tags
+        :param tag_name:
+        :param parent:
+        :param contents:
+        :param attr:
+        :return:
+        """
+        tag = self.xml.createElement(tag_name)
+        if isinstance(attr, dict) and len(attr) > 0:
+            for key in attr.keys():
+                tag.setAttribute(key, attr[key])
+        if contents is not None and isinstance(contents, basestring):
+            tag.appendChild(self.xml.createTextNode(contents))
+        if isinstance(parent, dom.Document) or isinstance(parent, dom.Element):
+            parent.appendChild(tag)
+        elif isinstance(parent, str):
+            parent = self.xml.getElementsByTagName(parent)
+            if parent is not None:
+                parent.appendChild(tag)
+        return tag
 
 
 if __name__ == '__main__':
-    cm = CreateMapper('./', 'yht.xls')
+    cm = CreateMapper('./', 'yht.xls', 'com.smht.yht.model')
     cm.create_bean()
     cm.create_sql()
     cm.create_mapper()
+    # impl = dom.getDOMImplementation()
+    # print type(impl)
+    # xml = impl.createDocument(None, 'dads', None)
+    # print isinstance(xml, dom.Document)
