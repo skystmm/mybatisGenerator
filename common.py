@@ -15,6 +15,7 @@ typeMap = {
             'date': 'Date',
             'float': 'Float',
             'tinyint': 'Integer',
+            'datetime' : 'Date',
            }
 
 table_map = {}

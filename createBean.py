@@ -43,6 +43,7 @@ class CreateMapper(object):
                 type_name = c[1]
                 properties.append(
                     self.bean % (common.typeMap.get(type_name.split('(')[0]), common.underline_to_camel(column)))
+            properties.append('private Long srcUpdateTime;\r\n')
             properties.append('}')
             self.wirte_to_file('bean', class_name, 'java', properties)
 
@@ -126,27 +127,27 @@ class CreateMapper(object):
                                      attr={"id": "selectBy", "resultMap": 'BaseResultMap'})
 
         insert_tag = self.tag_create('insert', root, contents="insert into %s " % table_name,
-                                     attr={"id": "insert", "paramterType": class_name})
+                                     attr={"id": "insert", "parameterType": class_name})
 
         trim1_tag = self.tag_create("trim", insert_tag, attr={"prefix": "(", "suffix": ")", "suffixOverrides": ","})
 
         trim2_tag = self.tag_create("trim", insert_tag,
                                     attr={"prefix": "values (", "suffix": ")", "suffixOverrides": ","})
         update_tag = self.tag_create('update', root, contents="update %s " % table_name,
-                                     attr={'id': 'update', "paramterType": class_name})
+                                     attr={'id': 'update', "parameterType": class_name})
 
         set_tag = self.tag_create('set', update_tag)
 
         self.tag_create('delete', root, contents="delete from %s where %s = #{%s}" % (
             table_name, content[0][0], common.underline_to_camel(content[0][0])),
-                        attr={'id': 'delete', 'paramterType': class_name})
+                        attr={'id': 'delete', 'parameterType': class_name})
 
         for x in content:
 
             if x[0] == 'id':
                 tag = self.xml.createElement('id')
             else:
-                tag = self.xml.createElement('column')
+                tag = self.xml.createElement('result')
 
             tag.setAttribute("column", x[0])
             tag.setAttribute("property", common.underline_to_camel(x[0]))
@@ -166,7 +167,7 @@ class CreateMapper(object):
 
         update_tag.appendChild(
             self.xml.createTextNode(
-                "where %s = #{%s} " % (content[0][0], common.underline_to_camel(content[0][0]))))
+                "where %s = #{%s} and update_time = #{srcUpdateTime}" % (content[0][0], common.underline_to_camel(content[0][0]))))
         select_tag.appendChild(self.xml.createTextNode("order by %s desc" % content[0][0]))
         with open(self.output_path % ('xml', mapper, 'xml'), 'w')as f:
             self.xml.writexml(f, addindent='  ', newl='\n')
